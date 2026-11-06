@@ -1,0 +1,46 @@
+LONGITUDINAL DEMO — one patient, three visits (sick -> improving -> recovered)
+==============================================================================
+
+STORY FOR THE GUIDE
+  Demo patient "Ravi Kumar" (use any name) came with cardiac + seizure complaints.
+  Visit 1 (before treatment): fast irregular ECG + long seizure discharge on EEG.
+  Visit 2 (during treatment): improving on both.
+  Visit 3 (after recovery): normal ECG + normal EEG background.
+  Showing visit 1 -> 2 -> 3 from the SAME patient record proves history,
+  comparison ("since last visit") and trend charts.
+
+FILES (this folder)
+  visit1_before_treatment_ecg.csv / _strip.png   (ECG: ~102 bpm, ectopic beats)
+  visit2_during_treatment_ecg.csv / _strip.png   (ECG: ~86 bpm, few ectopy)
+  visit3_after_recovery_ecg.csv   / _strip.png   (ECG: ~72 bpm, normal sinus)
+  visit1_before_treatment_eeg.csv / _eeg_trace.png (EEG: 14 s seizure burst)
+  visit2_during_treatment_eeg.csv / _eeg_trace.png (EEG: 4 s brief discharge)
+  visit3_after_recovery_eeg.csv   / _eeg_trace.png (EEG: normal background)
+  ecg_extra_slow_bradycardia.csv + _strip.png  (extra: slow ~48 bpm)
+  ecg_extra_fast_tachycardia.csv + _strip.png  (extra: fast ~128 bpm)
+
+HOW TO BUILD THE 3-VISIT RECORD (do ECG first, same steps repeat for EEG)
+  1. Start the app. Register the patient ONCE (Patients page) and note the ID,
+     e.g. DEMO001.
+  2. Open /ecg. Enter record_id = DEMO001, study_date = 2026-05-10,
+     upload visit1_before_treatment_ecg.csv (or _strip.png), Submit.
+     Download the PDF -> Visit-1 report.
+  3. Same page, same record_id, study_date = 2026-07-15,
+     upload visit2 files, Submit. The page now shows comparison vs visit 1.
+  4. Same page, same record_id, study_date = 2026-09-20,
+     upload visit3 files, Submit.
+  5. Open the patient record -> History shows 3 ECG studies, trend chart of
+     heart rate / intervals falling back to normal. Same for EEG.
+
+FORM FIELDS PER FILE TYPE
+  ECG csv (.csv): upload directly, nothing extra needed (360 Hz assumed).
+  ECG strip photo (.png): grid is auto-detected; if it says "no timebase",
+     enter duration + paper speed 25.
+  EEG csv (.csv): MUST enter sampling rate = 128, task = seizure.
+  EEG trace photo (.png): MUST enter duration = 30 (sampling rate still 128).
+
+NOTE (say this to the guide)
+  Without the ~350 MB trained .keras files (not on GitHub), the app shows
+  real measured values (heart rate, intervals, spectral power, timelines)
+  plus an honest "no validated model" message instead of a fake diagnosis.
+  That refusal-to-guess is a designed feature, enforced by automated tests.
