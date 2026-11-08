@@ -80,7 +80,7 @@ def analyse_signal(signal, fs, model=None, card=None,
         return {
             "model_used": False, "n_windows": len(per_window),
             "windows": per_window, "episodes": [], "peak": None,
-            "duration_s": float(times[-1][1]),
+            "duration_s": float(np.shape(signal)[-1] / fs),
             "note": ("No validated model was used, so no window was "
                      "classified. The measurements above are computed from "
                      "the signal and stand on their own."),
@@ -115,7 +115,7 @@ def analyse_signal(signal, fs, model=None, card=None,
         "model_used": True, "n_windows": len(per_window),
         "windows": per_window, "episodes": episodes,
         "peak": peak_window(per_window, threshold),
-        "duration_s": float(times[-1][1]),
+            "duration_s": float(np.shape(signal)[-1] / fs),
         "threshold": threshold,
         "smoothing": {"windows": smooth_windows, "min_episode_s": min_episode_s},
         "artifact_windows": sum(1 for w in per_window if w["artifact"]),

@@ -90,9 +90,8 @@ def test_builder_escapes_markup_in_user_supplied_text():
     assert buf.getvalue().startswith(b"%PDF-")
 
 
-def test_ecg_report_carries_the_structured_clinical_sections(client):
-    """The parameter table, status and precautions must survive the round
-    trip from the result page into the PDF."""
+def test_ecg_report_keeps_measurements_without_findings_or_advice(client):
+    """The ECG PDF carries measurements and omits interpretation sections."""
     import json
     from ecg.clinical import clinical_report
     from ecg.quality import Measurement, OK
@@ -106,7 +105,12 @@ def test_ecg_report_carries_the_structured_clinical_sections(client):
                 interpretation="x", recommendation="y",
                 clinical_json=json.dumps(clinical_report(rep, sex="Male")))
     body = _is_pdf(client.post("/download_ecg_report", data=data))
-    assert len(body) > 5000, "clinical sections appear to be missing"
+    text = _pdf_text(body)
+    assert len(body) > 4000
+    assert b"ECG Measurements" in text
+    for section in (b"ECG Findings", b"ECG Impression", b"Measured Findings",
+                    b"Recommendations", b"ECG Signal Waveform"):
+        assert section not in text
 
 
 def test_ecg_report_omits_the_section_when_the_payload_is_malformed(client):
@@ -151,14 +155,36 @@ def test_ecg_report_reads_like_a_clinical_report(client):
                 interpretation="x", recommendation="y",
                 clinical_json=json.dumps(clinical_report(rep, sex="Male")))
     text = _pdf_text(_is_pdf(client.post("/download_ecg_report", data=data)))
-    for s in DOCTOR_SECTIONS + (b"ECG Classification", b"(ABNORMAL"):
+    for s in (b"Patient Information", b"Examination Date", b"ECG Examination Details",
+              b"Recording Duration", b"Sampling Frequency", b"ECG Measurements"):
         assert s in text, s
+    for s in (b"ECG Findings", b"ECG Impression", b"Recommendations", b"Measured Findings"):
+        assert s not in text, s
+    assert b"Reporting Clinician" not in text
+
+
+def test_eeg_report_uses_clinical_sections_and_timebase(client):
+    import json
+    payload = {"model_used": False, "task": "Epileptiform / seizure activity",
+               "task_key": "seizure", "source": "2 channels at 256 Hz",
+               "file_type": "EDF", "sampling_frequency_hz": 256.0,
+               "n_channels": 2, "duration_s": 12.0, "n_windows": 10,
+               "artifact_windows": 1, "representation": "Scalogram",
+               "not_assessed_reason": "No validated model was used."}
+    data = dict(PATIENT, eeg_json=json.dumps(payload))
+    text = _pdf_text(_is_pdf(client.post("/download_eeg_report", data=data)))
+    for label in (b"Patient Information", b"EEG Examination Details", b"File Type",
+                  b"Sampling Frequency", b"Channels", b"EEG Findings",
+                  b"NOT ASSESSED", b"EEG Impression"):
+        assert label in text, label
+    assert b"Not assessed" in text
 
 
 def test_ecg_report_without_classifier_or_payload_is_not_normal(client):
     data = dict(PATIENT, prediction="", classifier_error="no model")
     text = _pdf_text(_is_pdf(client.post("/download_ecg_report", data=data)))
-    assert b"(NOT ASSESSED" in text and b"(NORMAL" not in text
+    assert b"Not performed" in text and b"no model" in text
+    assert b"(NORMAL" not in text
 
 
 @pytest.mark.parametrize("prediction,verdict", [
@@ -167,8 +193,19 @@ def test_mri_report_reads_like_a_clinical_report(client, prediction, verdict):
     data = dict(PATIENT, prediction=prediction, confidence="88.10",
                 location="Left frontal", severity="Moderate", area="3.2")
     text = _pdf_text(_is_pdf(client.post("/download_brain_tumor_report", data=data)))
-    for s in DOCTOR_SECTIONS + (b"MRI Classification", verdict):
+    for s in (b"Patient Information", b"Examination Date", b"MRI Examination Details",
+              b"MRI Findings", b"MRI Impression", b"Model Classification",
+              b"Classifier Confidence", b"Recommendations", verdict):
         assert s in text, s
+    assert b"Reporting Clinician" not in text
+    assert b"Segmentation / Lesion Measurement" in text
+
+
+def test_mri_report_without_a_classification_says_not_performed(client):
+    text = _pdf_text(_is_pdf(client.post("/download_brain_tumor_report", data=PATIENT)))
+    assert b"Not performed" in text
+    assert b"NOT ASSESSED" in text
+    assert b"(NORMAL" not in text
 
 
 def test_a_blank_percentage_reads_not_measurable_not_a_bare_percent(client):

@@ -50,7 +50,7 @@ def collect_metadata(form, fields):
 
     if values.get("age"):
         try:
-            age = int(float(values["age"]))
+            age = int(values["age"])
             if not 0 <= age <= 130:
                 raise ValueError
             values["age"] = str(age)

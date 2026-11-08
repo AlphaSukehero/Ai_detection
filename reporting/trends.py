@@ -10,8 +10,8 @@ import matplotlib.pyplot as plt  # noqa: E402
 
 from records.catalog import entries  # noqa: E402
 
-NORMAL_BAND = "#10b981"
-LINE = "#4f46e5"
+NORMAL_BAND = "#e8e8e8"
+LINE = "#222222"
 MAX_PANELS = 9
 
 

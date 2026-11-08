@@ -1,4 +1,5 @@
 import app as flask_app
+from app import load_ecg_file
 
 
 def _post(client, path, extra):
@@ -8,6 +9,17 @@ def _post(client, path, extra):
             "clinical_history": "test"}
     data.update(extra)
     return client.post(path, data=data, content_type="multipart/form-data")
+
+
+def test_ecg_csv_refuses_non_finite_samples(tmp_path):
+    path = tmp_path / "invalid.csv"
+    path.write_text("1.0\ninf\n2.0\n")
+    try:
+        load_ecg_file(str(path))
+    except ValueError as exc:
+        assert "non-finite" in str(exc)
+    else:
+        raise AssertionError("non-finite ECG samples should be refused")
 
 
 def test_ecg_route_still_renders_successfully():

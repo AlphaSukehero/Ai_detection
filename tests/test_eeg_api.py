@@ -38,7 +38,7 @@ def test_api_errors_are_json_with_400(rclient):
     resp = rclient.post("/api/eeg/analyze", data=dict(PATIENT),
                         content_type="multipart/form-data")
     assert resp.status_code == 400 and resp.get_json() == {
-        "ok": False, "error": "Please upload an EEG recording or trace image."}
+        "ok": False, "error": "Please upload an EEG recording."}
 
 
 def test_api_csv_needs_a_sampling_rate(rclient):

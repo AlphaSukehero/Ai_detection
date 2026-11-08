@@ -17,15 +17,36 @@ training time. They are the numbers the app is entitled to claim.
 
 ## Running it
 
-Model checkpoints are not in git (they total ~350 MB). Train them with
-`scripts/train_all.sh`, or drop existing `.keras` files plus their `.json`
-cards into `model/`.
+**Uploading this repository to GitHub shares the source code; it does not run
+the app as a website.** Each person can clone it and run the Flask app locally
+with the steps below. To give people one shared website, deploy it to a Python
+host that runs Flask/WSGI.
+
+The trained model checkpoint files are intentionally excluded from Git (they
+total about 350 MB). Without those files, the pages load but model
+classification is unavailable. To enable classification, provide the matching
+`.keras` checkpoints and JSON cards in `model/`, or point `MODEL_FOLDER` at a
+folder containing them. Do not commit patient records or uploads.
+
+### Windows (PowerShell)
+
+```powershell
+py -3.12 -m venv .venv
+.venv\Scripts\python.exe -m pip install -r requirements.txt -r requirements-eeg.txt
+.venv\Scripts\python.exe app.py
+```
+
+### macOS / Linux
 
 ```bash
 python -m venv .venv
 .venv/bin/pip install -r requirements.txt -r requirements-eeg.txt
-.venv/bin/python app.py          # http://127.0.0.1:5050 — all modules (ECG, EEG, MRI, patients)
+.venv/bin/python app.py          # http://127.0.0.1:5050
 ```
+
+Open `http://127.0.0.1:5050` on the same computer. Other people who clone the
+repo need to install the dependencies and start their own copy. The default
+server listens only on the local computer; it is not a public internet server.
 
 `PORT` overrides the port. `UPLOAD_TTL_SECONDS` (default 86400) sets how long
 generated files survive in `uploads/` before the sweep removes them.

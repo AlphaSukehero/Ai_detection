@@ -23,6 +23,8 @@ def test_tumour_impression_cites_the_measurements():
     n = clinical_notes("Glioma", {"location": "Left frontal", "area": "4.2",
                                   "confidence": "91.0"})
     assert "Left frontal" in n["impression"] and "91.0%" in n["impression"]
+    assert "classifier" in n["impression"].lower()
+    assert "confirmed diagnosis" in n["impression"].lower()
 
 
 def test_pituitary_precautions_mention_vision():

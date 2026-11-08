@@ -62,6 +62,13 @@ def test_non_numeric_cells_are_refused(tmp_path):
         read_csv_recording(str(p), fs=FS)
 
 
+def test_non_finite_cells_are_refused(tmp_path):
+    p = tmp_path / "non-finite.csv"
+    p.write_text("Fp1,O1\n1.0,2.0\nNaN,3.0\n")
+    with pytest.raises(RecordingError, match="non-finite"):
+        read_csv_recording(str(p), fs=FS)
+
+
 def test_an_empty_file_is_refused(tmp_path):
     p = tmp_path / "empty.csv"
     p.write_text("")

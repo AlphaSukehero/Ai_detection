@@ -1,5 +1,6 @@
 """The patient record store: registry, studies, files, comparison."""
 import os
+from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 
@@ -64,6 +65,19 @@ def test_ids_survive_reconnect(root):
     c = db.connect(root)
     assert patients.register(c, name="B")["id"] == "PT-000002"
     c.close()
+
+
+def test_concurrent_connections_apply_migrations_once(root):
+    def connect_and_read_version():
+        connection = db.connect(root)
+        try:
+            return connection.execute("SELECT version FROM schema_version").fetchone()[0]
+        finally:
+            connection.close()
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        versions = list(pool.map(lambda _n: connect_and_read_version(), range(2)))
+    assert versions == [len(db.MIGRATIONS)] * 2
 
 
 def test_search_by_id_name_and_phone(conn):

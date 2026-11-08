@@ -140,15 +140,13 @@ def study(pid, sid):
 @bp.route("/patients/<pid>/studies/<sid>/pdf")
 def study_pdf(pid, sid):
     s = study_or_404(pid, sid)
-    rel = s["files"].get("pdf")
-    path = store.absolute(records_root(), rel) if rel else None
-    if path and os.path.isfile(path):
-        return send_file(path, mimetype="application/pdf", as_attachment=True,
-                         download_name=f"{sid}_{MODALITY_LABELS[s['modality']].replace(' ', '_')}.pdf")
-    # Stored PDF missing: rebuild it from the stored report rather than fail.
+    # Rebuild from the stored report on every download so historical records
+    # receive the current report layout. Replace the cached PDF as well, so
+    # the patient's record continues to contain the PDF that was just issued.
     from webapp.study_binding import render_stored_pdf
     buffer, _name = render_stored_pdf(
         records_root(), s, studies.previous_study(get_conn(), s))
+    studies.attach_file(get_conn(), records_root(), s, "pdf", buffer.getvalue(), ".pdf")
     return send_file(buffer, mimetype="application/pdf", as_attachment=True,
                      download_name=f"{sid}.pdf")
 

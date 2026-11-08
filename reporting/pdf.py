@@ -22,24 +22,25 @@ from reportlab.platypus import (
 REPORT_STYLES = getSampleStyleSheet()
 REPORT_STYLES.add(ParagraphStyle(
     name="ReportTitle", parent=REPORT_STYLES["Title"],
-    fontSize=18, leading=22, spaceAfter=2
+    fontName="Helvetica-Bold", fontSize=16, leading=20, spaceAfter=4,
+    textColor=colors.black, alignment=0
 ))
 REPORT_STYLES.add(ParagraphStyle(
     name="ReportSubtitle", parent=REPORT_STYLES["Normal"],
-    fontSize=10, leading=14, textColor=colors.HexColor("#475569"), alignment=1
+    fontSize=9, leading=12, textColor=colors.HexColor("#333333"), alignment=0
 ))
 REPORT_STYLES.add(ParagraphStyle(
     name="SectionHeading", parent=REPORT_STYLES["Heading3"],
-    fontSize=11.5, leading=14, spaceBefore=4, spaceAfter=6,
-    textColor=colors.HexColor("#0f172a")
+    fontName="Helvetica-Bold", fontSize=11, leading=14, spaceBefore=10, spaceAfter=5,
+    textColor=colors.black
 ))
 REPORT_STYLES.add(ParagraphStyle(
     name="ReportBody", parent=REPORT_STYLES["BodyText"],
-    fontSize=10, leading=14.5
+    fontSize=9.5, leading=13
 ))
 REPORT_STYLES.add(ParagraphStyle(
     name="Cell", parent=REPORT_STYLES["BodyText"],
-    fontSize=9.5, leading=12.5, spaceBefore=0, spaceAfter=0
+    fontSize=9, leading=11.5, spaceBefore=0, spaceAfter=0
 ))
 REPORT_STYLES.add(ParagraphStyle(
     name="Disclaimer", parent=REPORT_STYLES["Italic"],
@@ -66,13 +67,16 @@ def clinician_signoff():
     ])
 
 
-def doctor_sections(notes):
-    """Recommendations, precautions and sign-off, in that order."""
-    return [
-        ("bullets", "Recommendations", notes["recommendations"]),
-        ("bullets", "Precautions", notes["precautions"]),
-        clinician_signoff(),
-    ]
+def doctor_sections(notes, concise=False):
+    """Recommendations, with optional concise layout for clinical reports."""
+    recommendations = notes.get("recommendations") or []
+    sections = [("bullets", "Recommendations", recommendations)] if recommendations else []
+    if not concise:
+        precautions = notes.get("precautions") or []
+        if precautions:
+            sections.append(("bullets", "Precautions", precautions))
+        sections.append(clinician_signoff())
+    return sections
 
 
 def _cell(text, bold=False):
@@ -83,18 +87,17 @@ def _cell(text, bold=False):
     return Paragraph(safe, REPORT_STYLES["Cell"])
 
 
-def _data_table(rows, accent):
-    """Build a two-column label/value table with a coloured header row."""
+def _data_table(rows, accent=None):
+    """Build a two-column clinical table with restrained grey headings."""
     data = [[_cell(rows[0][0], bold=True), _cell(rows[0][1], bold=True)]]
     data += [[_cell(label), _cell(value)] for label, value in rows[1:]]
 
     table = Table(data, colWidths=TABLE_WIDTHS, repeatRows=1, hAlign="LEFT")
     table.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor(accent)),
-        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-        ("ROWBACKGROUNDS", (0, 1), (-1, -1),
-         [colors.white, colors.HexColor("#f8fafc")]),
-        ("GRID", (0, 0), (-1, -1), 0.6, colors.HexColor("#cbd5e1")),
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#e8e8e8")),
+        ("TEXTCOLOR", (0, 0), (-1, -1), colors.black),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#fafafa")]),
+        ("GRID", (0, 0), (-1, -1), 0.35, colors.HexColor("#b8b8b8")),
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
         ("LEFTPADDING", (0, 0), (-1, -1), 8),
         ("RIGHTPADDING", (0, 0), (-1, -1), 8),
@@ -105,17 +108,18 @@ def _data_table(rows, accent):
 
 
 def _header_footer(canvas, doc, accent, footer_text):
-    """Draw the accent rule, page number and footer note on every page."""
+    """Draw a neutral rule and consistent page number on every page."""
     canvas.saveState()
     width, _ = A4
 
-    canvas.setStrokeColor(colors.HexColor(accent))
-    canvas.setLineWidth(2)
+    canvas.setStrokeColor(colors.HexColor("#999999"))
+    canvas.setLineWidth(0.6)
     canvas.line(36, doc.pagesize[1] - 30, width - 36, doc.pagesize[1] - 30)
 
-    canvas.setFont("Helvetica", 7.5)
-    canvas.setFillColor(colors.HexColor("#94a3b8"))
-    canvas.drawString(36, 24, footer_text)
+    canvas.setFont("Helvetica", 8)
+    canvas.setFillColor(colors.HexColor("#333333"))
+    if footer_text:
+        canvas.drawString(36, 24, footer_text)
     canvas.drawRightString(width - 36, 24, f"Page {canvas.getPageNumber()}")
     canvas.restoreState()
 
@@ -181,8 +185,9 @@ def report_story(title, subtitle, accent, meta, meta_fields, meta_heading,
         Spacer(1, 16),
     ]
     story += section_flowables(sections, accent)
-    story.append(Spacer(1, 6))
-    story.append(Paragraph(escape(disclaimer), REPORT_STYLES["Disclaimer"]))
+    if disclaimer:
+        story.append(Spacer(1, 6))
+        story.append(Paragraph(escape(disclaimer), REPORT_STYLES["Disclaimer"]))
     return story
 
 

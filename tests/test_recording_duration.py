@@ -33,7 +33,7 @@ def _ecg(fs=360.0, seconds=10.0, bpm=72.0):
 
 
 def _csv(*columns, header=None):
-    rows = [",".join(f"{v:.6f}" for v in r) for r in zip(*columns)]
+    rows = [",".join(f"{v:.6f}" for v in r) for r in zip(*columns, strict=True)]
     text = "\n".join(([header] if header else []) + rows) + "\n"
     return io.BytesIO(text.encode())
 
@@ -54,7 +54,7 @@ def _bpm(html):
 
 @pytest.mark.parametrize("path, field, upload_heading", [
     ("/ecg", "ecg_duration", "ECG Signal Data"),
-    ("/eeg", "duration", "EEG Recording</h3>"),
+    ("/eeg", "duration", "EEG Recording Upload</h3>"),
 ])
 def test_duration_is_asked_with_the_patient_details(path, field, upload_heading):
     with flask_app.app.test_client() as c:

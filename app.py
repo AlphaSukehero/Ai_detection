@@ -81,18 +81,27 @@ except Exception as e:
 # FLASK APPLICATION SETUP
 # ============================================================
 
+PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
+
+
+def _project_path(path):
+    """Resolve app data paths from this file, independent of launch directory."""
+    return path if os.path.isabs(path) else os.path.join(PROJECT_ROOT, path)
+
+
 app = Flask(__name__)
 
-UPLOAD_FOLDER = "uploads"
-REPORT_FOLDER = "reports"
+UPLOAD_FOLDER = os.path.join(PROJECT_ROOT, "uploads")
+REPORT_FOLDER = os.path.join(PROJECT_ROOT, "reports")
 
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(REPORT_FOLDER, exist_ok=True)
-os.makedirs("static/samples", exist_ok=True)
+os.makedirs(os.path.join(PROJECT_ROOT, "static", "samples"), exist_ok=True)
 
 app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
 # Patient record store (SQLite + study files). Never swept; see records/.
-app.config["RECORDS_ROOT"] = os.environ.get("RECORDS_ROOT", "records_data")
+app.config["RECORDS_ROOT"] = _project_path(
+    os.environ.get("RECORDS_ROOT", "records_data"))
 app.register_blueprint(patients_bp)
 app.context_processor(bound_context)
 app.config["MAX_CONTENT_LENGTH"] = 32 * 1024 * 1024  # 32 MB upload limit
@@ -102,7 +111,8 @@ app.config["MAX_CONTENT_LENGTH"] = 32 * 1024 * 1024  # 32 MB upload limit
 # MODEL PATHS & GLOBALS
 # ============================================================
 
-MODEL_FOLDER = "model"
+MODEL_FOLDER = os.environ.get("MODEL_FOLDER", os.path.join(PROJECT_ROOT, "model"))
+MODEL_FOLDER = _project_path(MODEL_FOLDER)
 
 # Every model below is loaded through mlkit.registry, which refuses any
 # checkpoint whose sidecar card does not match the task, class order, input
@@ -248,7 +258,10 @@ def load_ecg_file(filepath):
         if numeric.empty:
             continue
 
-        return numeric.values.astype(float)
+        values = numeric.values.astype(float)
+        if not np.isfinite(values).all():
+            raise ValueError("ECG file contains non-finite samples (NaN or infinity).")
+        return values
 
     raise ValueError(
         "Unable to read ECG file: no numeric samples found. Expected a plain "
@@ -520,27 +533,28 @@ def predict_brain_tumor(image_path):
 
     top_class = MRI_CLASSES[top_idx]
 
-    # Clinical findings description based on predicted tumor type
+    # Report classifier output without presenting it as an observed
+    # radiological finding or a confirmed diagnosis.
     descriptions = {
         "Glioma": {
-            "title": "Glioma Detected",
-            "findings": "Hyperintense glial tissue lesion observed with irregular focal boundaries.",
-            "recommendation": "Urgent neurosurgical consultation and contrast-enhanced MRI scan recommended."
+            "title": "Glioma category",
+            "findings": "Classifier output is most consistent with the Glioma category; this is not a radiological finding or confirmed diagnosis.",
+            "recommendation": "Radiologist review of the complete MRI and clinical history is required."
         },
         "Meningioma": {
-            "title": "Meningioma Detected",
-            "findings": "Dural-based extra-axial lesion showing characteristic homogeneous enhancement.",
-            "recommendation": "Neurosurgical assessment recommended to evaluate mass effect."
+            "title": "Meningioma category",
+            "findings": "Classifier output is most consistent with the Meningioma category; this is not a radiological finding or confirmed diagnosis.",
+            "recommendation": "Radiologist review of the complete MRI and clinical history is required."
         },
         "No Tumor": {
-            "title": "No Tumor Detected",
-            "findings": "Brain parenchyma appears within normal limits. No obvious focal mass or structural lesion.",
-            "recommendation": "Routine clinical follow-up as indicated by symptoms."
+            "title": "No Tumor category",
+            "findings": "Classifier assigned its highest score to the No Tumor category. This does not exclude intracranial pathology.",
+            "recommendation": "Correlate the classifier output with symptoms and the complete radiological review."
         },
         "Pituitary": {
-            "title": "Pituitary Tumor Detected",
-            "findings": "Sellar / suprasellar mass consistent with pituitary adenoma characteristics.",
-            "recommendation": "Endocrine evaluation and dedicated thin-slice sellar MRI recommended."
+            "title": "Pituitary category",
+            "findings": "Classifier output is most consistent with the Pituitary category; this is not a radiological finding or confirmed diagnosis.",
+            "recommendation": "Radiologist review of the complete MRI and clinical history is required."
         }
     }
 
@@ -676,9 +690,10 @@ def uploaded_file(filename):
 
 @app.route("/samples/<filename>")
 def sample_file(filename):
-    if not SAMPLE_NAME_RE.fullmatch(filename):
+    if (filename != "sample_eeg_test.edf"
+            and not SAMPLE_NAME_RE.fullmatch(filename)):
         abort(404)
-    return send_from_directory("static/samples", filename)
+    return send_from_directory(os.path.join(PROJECT_ROOT, "static", "samples"), filename)
 
 
 # ------------------------------------------------------------
@@ -718,9 +733,10 @@ ECG_REPORT_KEYS = (
     "classifier", "classifier_error", "heart_rate", "rr_interval",
     "qrs_duration", "pr_interval", "qt_interval", "qtc", "sdnn", "rmssd",
     "rhythm", "st_segment", "axis", "interpretation", "recommendation",
-    "signal_quality", "input_source")
+    "signal_quality", "input_source", "recording_duration_s",
+    "sampling_frequency_hz")
 MRI_REPORT_KEYS = ("prediction", "confidence", "findings", "recommendation",
-                   "location", "model_name")
+                   "location", "model_name", "file_type", "input_source")
 
 
 def dumps_safe(obj):
@@ -783,7 +799,8 @@ def analyze_ecg():
         filepath = os.path.join(app.config["UPLOAD_FOLDER"], safe_name)
         file.save(filepath)
     elif sample_type:
-        sample_path = os.path.join("static/samples", f"sample_{sample_type}_ecg.csv")
+        sample_path = os.path.join(
+            PROJECT_ROOT, "static", "samples", f"sample_{sample_type}_ecg.csv")
         if os.path.exists(sample_path):
             filepath = sample_path
             file_ext = ".csv"
@@ -817,8 +834,10 @@ def analyze_ecg():
                 # No timebase: nothing is measurable, and classifying beats
                 # segmented at a guessed rate would be confident nonsense.
                 X = None
+                sampling_frequency_hz = None
             else:
-                X = prepare_beats(ecg_values, fs=px_per_mm * paper_speed)
+                sampling_frequency_hz = px_per_mm * paper_speed
+                X = prepare_beats(ecg_values, fs=sampling_frequency_hz)
             report = analyse_ecg_parameters(leads, px_per_mm=px_per_mm,
                                             from_image=True,
                                             paper_speed_mm_s=paper_speed)
@@ -830,6 +849,7 @@ def analyze_ecg():
             # failing both is the MIT-BIH 360 Hz assumed -- and said so.
             ecg_values, fs, rate_source = table_signal(
                 load_ecg_file(filepath), ecg_duration)
+            sampling_frequency_hz = fs
             timebase_warning = None
             X = prepare_beats(ecg_values, fs=fs)
             report = analyse_ecg_parameters(ecg_values, fs=fs)
@@ -902,6 +922,9 @@ def analyze_ecg():
             "clinical": clinical,
             "waveform": plot_filename,
             "input_source": input_source,
+            "recording_duration_s": (len(ecg_values) / sampling_frequency_hz
+                                      if sampling_frequency_hz else None),
+            "sampling_frequency_hz": sampling_frequency_hz,
             "timebase_warning": timebase_warning,
         }
         result["notes"] = ecg_doctor_notes(clinical, result["prediction"],
@@ -995,6 +1018,7 @@ def mri_attention_map(img, prediction, model, card):
 def analyze_brain_tumor():
     file = request.files.get("mri_file")
     sample_name = request.form.get("sample_name")
+    uploaded_file = bool(file and file.filename)
 
     form, bind_error = patient_form(request.form)
     entered, meta_errors = collect_metadata(form, PATIENT_FIELDS)
@@ -1021,7 +1045,8 @@ def analyze_brain_tumor():
         filepath = os.path.join(app.config["UPLOAD_FOLDER"], safe_name)
         file.save(filepath)
     elif sample_name:
-        sample_path = os.path.join("static/samples", f"mri_{sample_name}.jpg")
+        sample_path = os.path.join(
+            PROJECT_ROOT, "static", "samples", f"mri_{sample_name}.jpg")
         if os.path.exists(sample_path):
             filepath = sample_path
 
@@ -1060,6 +1085,8 @@ def analyze_brain_tumor():
 
         result = {
             "image_filename": display_filename,
+            "file_type": os.path.splitext(filepath)[1].lstrip(".").upper(),
+            "input_source": "Uploaded file" if uploaded_file else "Built-in sample",
             "prediction": res["prediction"],
             "confidence": res["confidence"],
             "probabilities": res["probabilities"],
@@ -1123,38 +1150,50 @@ def get_eeg_model(task, representation="scalogram"):
     if key not in _eeg_models:
         _eeg_models[key] = (None, None)
         suffix = "" if representation == "scalogram" else f"_{representation}"
-        path = os.path.join("model", f"eeg_{task}{suffix}.keras")
+        path = os.path.join(MODEL_FOLDER, f"eeg_{task}{suffix}.keras")
         if TF_AVAILABLE and os.path.exists(path):
             try:
                 card = load_card(path)
-                if not str(card.get("preprocessing", "")).startswith(representation):
+                preprocessing = card.get("preprocessing", "")
+                validate_card(card, f"eeg_{task}", ["negative", "positive"],
+                              [64, 64, 1], preprocessing)
+                if not str(preprocessing).startswith(representation):
                     raise ValueError(
-                        f"card preprocessing {card.get('preprocessing')!r} is not {representation}")
-                _eeg_models[key] = (load_model(path, compile=False), card)
+                        f"card preprocessing {preprocessing!r} is not {representation}")
+                model = load_model(path, compile=False)
+                model_input = tuple(model.input_shape[1:])
+                model_output = model.output_shape[-1]
+                if model_input != (64, 64, 1) or model_output not in (1, 2):
+                    raise ValueError(
+                        f"model shape {model.input_shape} -> {model.output_shape} "
+                        "does not match the EEG inference contract")
+                _eeg_models[key] = (model, card)
             except Exception as e:
                 print(f"EEG model {task}/{representation} unavailable: {e}")
     return _eeg_models[key]
 
 
 def _eeg_to_signal(filepath, ext, duration, sampling_rate=None):
-    """Upload -> (signal, fs, provenance). Raises on an unusable input."""
+    """Upload -> (signal, fs, provenance, channel_count)."""
     if ext == ".csv":
         from eeg.loaders import read_csv_recording
         signal, fs, names = read_csv_recording(filepath, sampling_rate,
                                                duration_s=duration)
         return (np.mean(signal, axis=0), fs,
-                f"CSV, {len(names)} channels at {fs:g} Hz (values read as µV)")
+                f"CSV, {len(names)} channels at {fs:g} Hz (values read as µV)",
+                len(names))
     if ext in EEG_SIGNAL_EXTENSIONS:
         from eeg.loaders import read_recording
         signal, fs, names = read_recording(filepath)
         # Channels are averaged: this pipeline localises in time, not space.
-        return np.mean(signal, axis=0), fs, f"{len(names)} channels at {fs:.0f} Hz"
+        return (np.mean(signal, axis=0), fs,
+                f"{len(names)} channels at {fs:.0f} Hz", len(names))
     from eeg.digitize import digitize_channels
     signals, fs, source, n_ch = digitize_channels(filepath, duration_s=duration,
                                                   target_fs=128.0)
     # Each channel is traced in its own band, then averaged like the EDF path.
     return (np.mean(signals, axis=0), fs,
-            f"{n_ch} channels digitised from image ({source})")
+            f"{n_ch} channels digitised from image ({source})", n_ch)
 
 
 def create_eeg_plot(result, bands, filename):
@@ -1194,12 +1233,13 @@ def _eeg_page(**kw):
 
 def _form_float(form, key):
     try:
-        return float(form.get(key) or 0) or None
+        value = float(form.get(key) or 0)
     except (TypeError, ValueError):
         return None
+    return value if np.isfinite(value) and value > 0 else None
 
 
-def run_eeg_analysis(form_in, file):
+def run_eeg_analysis(form_in, file, trace_file=None):
     """Everything behind an EEG analysis, shared by the page and the API.
 
     Returns {"error", "entered"} on refusal, else {"view", "patient",
@@ -1228,7 +1268,9 @@ def run_eeg_analysis(form_in, file):
     sampling_rate = _form_float(form_in, "sampling_rate")
 
     if not file or file.filename == "":
-        return {"error": "Please upload an EEG recording or trace image.",
+        file = trace_file
+    if not file or file.filename == "":
+        return {"error": "Please upload an EEG recording.",
                 "entered": entered}
     ext = os.path.splitext(os.path.basename(file.filename))[1].lower()
     if ext not in EEG_SIGNAL_EXTENSIONS | {".csv"} | (IMAGE_EXTENSIONS - DICOM_EXTENSIONS):
@@ -1238,7 +1280,8 @@ def run_eeg_analysis(form_in, file):
     file.save(filepath)
 
     try:
-        signal, fs, provenance = _eeg_to_signal(filepath, ext, duration, sampling_rate)
+        signal, fs, provenance, n_channels = _eeg_to_signal(
+            filepath, ext, duration, sampling_rate)
     except (CalibrationError, RecordingError) as e:
         return {"error": str(e), "entered": entered}
     except Exception as e:
@@ -1280,6 +1323,9 @@ def run_eeg_analysis(form_in, file):
         "representation": representation,
         "representation_label": EEG_REPRESENTATIONS[representation],
         "provenance": provenance,
+        "file_type": ext.lstrip(".").upper(),
+        "sampling_frequency_hz": fs,
+        "n_channels": n_channels,
         "duration_s": round(len(signal) / fs, 1),
         "model_used": result["model_used"],
         "not_assessed": not_assessed,
@@ -1296,6 +1342,8 @@ def run_eeg_analysis(form_in, file):
     }
     view["report"] = {
         "task": view["task_label"], "task_key": task, "source": provenance,
+        "file_type": view["file_type"],
+        "sampling_frequency_hz": fs, "n_channels": n_channels,
         "representation": view["representation_label"],
         "not_assessed_reason": not_assessed,
         "duration_s": view["duration_s"], "model_used": view["model_used"],
@@ -1333,7 +1381,8 @@ def run_eeg_analysis(form_in, file):
 
 @app.route("/analyze_eeg", methods=["POST"])
 def analyze_eeg():
-    out = run_eeg_analysis(request.form, request.files.get("eeg_file"))
+    out = run_eeg_analysis(request.form, request.files.get("eeg_file"),
+                           request.files.get("eeg_trace_file"))
     if "error" in out:
         return _eeg_page(error=out["error"], patient=out["entered"])
     return _eeg_page(result=out["view"], patient=out["patient"], saved=out["saved"],
@@ -1349,7 +1398,8 @@ def api_analyze_eeg():
     """
     from eeg.metrics import BANDS
 
-    out = run_eeg_analysis(request.form, request.files.get("eeg_file"))
+    out = run_eeg_analysis(request.form, request.files.get("eeg_file"),
+                           request.files.get("eeg_trace_file"))
     if "error" in out:
         return jsonify({"ok": False, "error": out["error"]}), 400
     view, patient, saved = out["view"], out["patient"], out["saved"]

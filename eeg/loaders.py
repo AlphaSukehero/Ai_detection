@@ -129,7 +129,11 @@ def read_csv_recording(path, fs, l_freq=0.5, h_freq=45.0, duration_s=None):
         values = numeric([c.strip() for c in line.split(delim)])
         if values is None:
             raise RecordingError(f"non-numeric value on line {n} of the CSV.")
+        if not np.isfinite(values).all():
+            raise RecordingError(f"non-finite value on line {n} of the CSV.")
         data.append(values)
+    if not data:
+        raise RecordingError("The CSV has no signal samples.")
     widths = {len(r) for r in data}
     if len(widths) != 1:
         raise RecordingError("CSV rows have different numbers of columns.")

@@ -233,9 +233,11 @@ def render_stored_pdf(root, study, previous):
     """(BytesIO, filename) of a stored study's report, previous one included."""
     extra = ()
     if previous:
-        extra = previous_sections(previous, study, study_images(root, previous))
+        previous_images = study_images(root, previous)
+        extra = previous_sections(previous, study, previous_images)
+    images = study_images(root, study)
     return render_study_pdf(study["modality"], study["report"],
-                            study_images(root, study), extra)
+                            images, extra)
 
 
 def previous_view(previous):

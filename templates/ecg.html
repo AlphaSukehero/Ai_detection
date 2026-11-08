@@ -162,11 +162,11 @@
                 <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 28px;">
                     <div class="metric-box">
                         <div class="metric-label">Prediction</div>
-                        <div class="metric-value" style="font-size: 16px; color: {% if result.prediction == 'NORMAL' %}var(--success){% else %}var(--danger){% endif %};">{{ result.prediction }}</div>
+                        <div class="metric-value" style="font-size: 16px; color: {% if result.prediction == 'NORMAL' %}var(--success){% else %}var(--danger){% endif %};">{{ result.prediction or 'Not performed' }}</div>
                     </div>
                     <div class="metric-box">
                         <div class="metric-label">Confidence</div>
-                        <div class="metric-value" style="font-size: 16px;">{{ result.confidence }}%</div>
+                        <div class="metric-value" style="font-size: 16px;">{% if result.confidence is not none %}{{ result.confidence }}%{% else %}—{% endif %}</div>
                     </div>
                     <div class="metric-box">
                         <div class="metric-label">Atrial Prob</div>
@@ -372,6 +372,8 @@
                     <input type="hidden" name="atrial_probability" value="{{ result.atrial_probability }}">
                     <input type="hidden" name="signal_quality" value="{{ result.signal_quality }}">
                     <input type="hidden" name="input_source" value="{{ result.input_source }}">
+                    <input type="hidden" name="recording_duration_s" value="{{ result.recording_duration_s or '' }}">
+                    <input type="hidden" name="sampling_frequency_hz" value="{{ result.sampling_frequency_hz or '' }}">
                     <button type="submit" class="btn-primary" style="width: 100%; padding: 14px 24px; background: var(--ecg-gradient); box-shadow: 0 4px 15px rgba(239, 68, 68, 0.3);">
                         📥 Download Complete Patient Report (PDF)
                     </button>

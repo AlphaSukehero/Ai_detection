@@ -50,11 +50,11 @@ def _impression(prediction, v):
     conf_text = f" (classifier confidence {confidence}%)" if confidence else ""
 
     if prediction == "No Tumor":
-        return ("No focal mass or structural lesion was identified by the "
-                f"classifier{conf_text}. This screening result does not "
-                "exclude small, early or non-enhancing lesions, or pathology "
-                "outside the four trained classes; correlate with symptoms "
-                "and the full radiological read.")
+        return ("The classifier assigned the highest score to its no-tumour "
+                f"category{conf_text}. This is a screening output, not a "
+                "radiological interpretation. It does not exclude lesions or "
+                "other intracranial pathology; correlate with symptoms and "
+                "the complete study reviewed by a radiologist.")
 
     if prediction not in TUMOUR_DESCRIPTIONS:
         return ("No automated classification is available for this study. "
@@ -68,51 +68,29 @@ def _impression(prediction, v):
             else f"{location} region"
         detail.append(f"the highest model activation lies in the {where}")
     detail_text = (", " + ", ".join(detail)) if detail else ""
-    return (f"ABNORMAL study. The MRI shows "
-            f"{TUMOUR_DESCRIPTIONS[prediction]}{conf_text}{detail_text}. "
-            "Localisation is derived from activation maps, not "
-            "calibrated measurement; lesion size is not measured. Histological confirmation and "
-            "specialist review are required before any diagnosis.")
+    return (f"The classifier assigned the highest score to the {prediction} "
+            f"category{conf_text}{detail_text}. This is a screening output, "
+            "not a radiological finding or confirmed diagnosis. Attention "
+            "localisation is derived from model activation maps; lesion size "
+            "is not measured. Radiologist review of the complete study is "
+            "required.")
 
 
 def _recommendations(prediction):
-    if prediction == "Glioma":
+    if prediction in TUMOUR_DESCRIPTIONS:
         return [
-            "Urgent neurosurgical / neuro-oncology referral.",
-            "Contrast-enhanced MRI brain with perfusion and spectroscopy if "
-            "available, to characterise grade.",
-            "Discussion at a multidisciplinary tumour board; tissue diagnosis "
-            "(biopsy or resection) for histology and molecular markers.",
-            "Assess for raised intracranial pressure and seizure activity.",
-        ]
-    if prediction == "Meningioma":
-        return [
-            "Neurosurgical assessment of size, location and mass effect.",
-            "Contrast-enhanced MRI to confirm the dural attachment.",
-            "Small asymptomatic lesions are often managed with interval "
-            "imaging (e.g. repeat MRI in 3–6 months); larger or symptomatic "
-            "lesions may need surgery or radiotherapy.",
-        ]
-    if prediction == "Pituitary":
-        return [
-            "Endocrinology referral with a full pituitary hormone panel "
-            "(prolactin, IGF-1, cortisol, TSH/T4, LH/FSH).",
-            "Dedicated thin-slice pituitary MRI with contrast.",
-            "Formal visual field assessment by ophthalmology.",
-            "Neurosurgical review if the lesion is large or compresses the "
-            "optic chiasm.",
+            "Radiologist review of the complete MRI and clinical history to "
+            "confirm or refute this classifier output.",
+            "Further imaging or specialist referral should be determined by "
+            "the reviewing clinician.",
         ]
     if prediction == "No Tumor":
         return [
-            "Routine clinical follow-up as indicated by symptoms.",
-            "If symptoms persist or progress, consider repeat or "
-            "contrast-enhanced imaging.",
+            "Correlate with the clinical presentation; this classifier output "
+            "does not exclude intracranial disease.",
+            "Obtain radiologist review if symptoms persist or progress.",
         ]
-    return [
-        "Full review of the images by a qualified radiologist.",
-        "Repeat automated analysis once a validated model is available.",
-    ]
-
+    return ["Full review of the images by a qualified radiologist."]
 
 def _precautions(prediction):
     if prediction == "Glioma":

@@ -41,6 +41,36 @@ def test_eeg_rejects_a_request_with_no_file(client):
     assert "Please upload an EEG recording" in resp.get_data(as_text=True)
 
 
+def test_dashboard_prefers_edf_and_separates_trace_images(client):
+    html = client.get("/eeg").get_data(as_text=True)
+    assert "Choose EDF recording" in html
+    assert 'accept=".edf,.bdf,.set,.fif,.csv"' in html
+    assert 'name="eeg_trace_file"' in html
+    assert "Optional: analyze a trace image" in html
+
+
+def test_edf_upload_uses_file_timebase_without_manual_duration(client, monkeypatch):
+    import eeg.loaders
+
+    signal = np.sin(np.arange(2560) * 2 * np.pi * 10 / 256)[None, :]
+    monkeypatch.setattr(eeg.loaders, "read_recording",
+                        lambda _path: (signal, 256.0, ["F3"]))
+    data = dict(PATIENT, task="seizure", eeg_file=(io.BytesIO(b"test"), "recording.edf"))
+    html = client.post("/analyze_eeg", data=data,
+                       content_type="multipart/form-data").get_data(as_text=True)
+    assert "Analysis Result" in html
+    assert "EDF" in html and "256.0 Hz" in html and "1 channels" in html
+
+
+def test_secondary_trace_image_upload_remains_supported(client):
+    data = dict(PATIENT, duration="20",
+                eeg_trace_file=(_trace_png(), "trace.png"))
+    html = client.post("/analyze_eeg", data=data,
+                       content_type="multipart/form-data").get_data(as_text=True)
+    assert "Analysis Result" in html
+    assert "PNG" in html
+
+
 def test_eeg_image_without_timebase_is_refused(client):
     data = dict(PATIENT, eeg_file=(_trace_png(), "trace.png"))
     html = client.post("/analyze_eeg", data=data,
@@ -131,8 +161,7 @@ def test_eeg_pdf_reads_like_a_clinical_report(client):
     pdf = client.post("/download_eeg_report",
                       data=dict(PATIENT, eeg_json=payload)).get_data()
     text = _pdf_text(pdf)
-    for heading in (b"Clinical Impression", b"Recommendations",
-                    b"Precautions", b"Reporting Clinician", b"(ABNORMAL"):
+    for heading in (b"EEG Impression", b"Recommendations", b"(ABNORMAL"):
         assert heading in text, heading
 
 

@@ -91,7 +91,7 @@ def test_pdf_has_no_fabricated_lesion_metrics(client):
     pdf = client.post("/download_brain_tumor_report", data=data).data
     assert pdf[:5] == b"%PDF-"
     text = _pdf_text(pdf)
-    assert b"MRI Classification" in text, "extraction must see real text"
+    assert b"MRI Findings" in text, "extraction must see real text"
     for s in (b"Area of Activation", b"Severity Indicator", b"Spread Indicator",
               b"Bounding Width"):
         assert s not in text, s

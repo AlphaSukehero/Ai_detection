@@ -77,7 +77,7 @@ def test_history_pdf_contains_every_study_and_the_comparison(rclient):
     text = _pdf_text(resp.data)
     for s in (b"COMPLETE PATIENT HISTORY", b"Asha Rao", pid.encode(),
               a.encode(), b.encode(), b"Visit Timeline", b"Contents",
-              b"Latest vs previous", b"ECG ANALYSIS REPORT"):
+              b"Latest vs previous", b"ELECTROCARDIOGRAM REPORT"):
         assert s in text, s
     pages = len(re.findall(rb"/Type /Page[^s]", resp.data))
     assert pages >= 4, pages

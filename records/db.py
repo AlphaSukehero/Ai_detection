@@ -66,27 +66,35 @@ def connect(root):
                            check_same_thread=False, timeout=10.0)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
-    conn.execute("PRAGMA journal_mode = WAL")
     migrate(conn)
     return conn
 
 
 def migrate(conn):
     conn.execute("CREATE TABLE IF NOT EXISTS schema_version (version INTEGER NOT NULL)")
-    row = conn.execute("SELECT version FROM schema_version").fetchone()
-    version = row[0] if row else 0
-    if row is None:
-        conn.execute("INSERT INTO schema_version (version) VALUES (0)")
-    for number, sql in enumerate(MIGRATIONS[version:], start=version + 1):
-        conn.execute("BEGIN IMMEDIATE")
-        try:
+    # Read the version only after taking the write lock. Otherwise two app
+    # workers starting together can both observe version N, then the second
+    # tries to apply migrations that the first has already committed.
+    conn.execute("BEGIN IMMEDIATE")
+    try:
+        row = conn.execute("SELECT version FROM schema_version LIMIT 1").fetchone()
+        version = row[0] if row else 0
+        if row is None:
+            conn.execute("INSERT INTO schema_version (version) VALUES (0)")
+        if version > len(MIGRATIONS):
+            raise RuntimeError(
+                f"records database schema {version} is newer than this app supports "
+                f"({len(MIGRATIONS)})")
+        while version < len(MIGRATIONS):
+            sql = MIGRATIONS[version]
             for statement in filter(str.strip, sql.split(";")):
                 conn.execute(statement)
-            conn.execute("UPDATE schema_version SET version = ?", (number,))
-            conn.execute("COMMIT")
-        except Exception:
-            conn.execute("ROLLBACK")
-            raise
+            version += 1
+            conn.execute("UPDATE schema_version SET version = ?", (version,))
+        conn.execute("COMMIT")
+    except Exception:
+        conn.execute("ROLLBACK")
+        raise
 
 
 class transaction:

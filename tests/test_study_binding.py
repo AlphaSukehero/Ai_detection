@@ -81,7 +81,7 @@ def test_stored_study_pdf_is_the_patients_report(rclient):
     resp = rclient.get(f"/patients/{pid}/studies/{sid}/pdf")
     assert resp.status_code == 200 and resp.mimetype == "application/pdf"
     text = _pdf_text(resp.data)
-    assert b"ECG ANALYSIS REPORT" in text and b"Asha Rao" in text
+    assert b"ELECTROCARDIOGRAM REPORT" in text and b"Asha Rao" in text
 
 
 def test_study_page_shows_the_stored_result(rclient):
@@ -118,7 +118,7 @@ def test_eeg_for_a_patient_is_saved(rclient):
     assert "Saved to record" in html, html[html.find("Error"):][:300]
     sid = _study_ids(html)[0]
     pdf = rclient.get(f"/patients/{pid}/studies/{sid}/pdf")
-    assert b"EEG ANALYSIS REPORT" in _pdf_text(pdf.data)
+    assert b"ELECTROENCEPHALOGRAM REPORT" in _pdf_text(pdf.data)
 
 
 @requires_mri_model

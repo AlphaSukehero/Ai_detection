@@ -85,7 +85,10 @@ def test_no_page_prints_a_python_none():
         for sample in ("normal", "abnormal"):
             html = _quick_ecg(c, sample)
             text = re.sub(r"<script.*?</script>|<[^>]+>", " ", html, flags=re.S)
-            assert not re.search(r"\bNone\b", text), re.search(r".{40}\bNone\b.{20}", text).group(0)
+            none_match = re.search(r"\bNone\b", text)
+            context = (text[max(0, none_match.start() - 40):none_match.end() + 20]
+                       if none_match else "")
+            assert none_match is None, context
             assert "nan" not in text.lower().split()
 
 

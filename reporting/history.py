@@ -19,10 +19,9 @@ from reportlab.platypus.tableofcontents import TableOfContents
 from records.catalog import MODALITY_LABELS
 from records.compare import compare
 from reporting.pdf import CONTENT_WIDTH, REPORT_STYLES, _data_table, report_story
-from reporting.study_reports import REPORT_SPECS, form_meta
-from webapp.metadata import PATIENT_FIELDS
+from reporting.study_reports import CLINICAL_REPORT_FIELDS, REPORT_SPECS, form_meta
 
-ACCENT = "#0f766e"
+ACCENT = "#777777"
 H1 = ParagraphStyle("HistH1", parent=REPORT_STYLES["ReportTitle"], fontSize=16,
                     leading=20, spaceAfter=10, alignment=0)
 TOC_L0 = ParagraphStyle("TOC0", fontName="Helvetica-Bold", fontSize=10.5,
@@ -51,15 +50,15 @@ class _HistoryDoc(BaseDocTemplate):
     def _decorate(self, canvas, doc):
         canvas.saveState()
         w, h = A4
-        canvas.setStrokeColor(colors.HexColor(ACCENT))
-        canvas.setLineWidth(2)
+        canvas.setStrokeColor(colors.HexColor("#999999"))
+        canvas.setLineWidth(0.6)
         canvas.line(36, h - 30, w - 36, h - 30)
         canvas.setFont("Helvetica", 7.5)
         canvas.setFillColor(colors.HexColor("#94a3b8"))
         p = self.patient
+        canvas.setFillColor(colors.HexColor("#333333"))
         canvas.drawString(36, h - 24, f"{p['name']} · {p['id']}")
-        canvas.drawRightString(w - 36, h - 24, "Complete Patient History — confidential")
-        canvas.drawString(36, 24, "Unified AI Diagnostic Platform — research prototype, not a medical device")
+        canvas.drawRightString(w - 36, h - 24, "Complete Patient History")
         canvas.drawRightString(w - 36, 24, f"Page {canvas.getPageNumber()}")
         canvas.restoreState()
 
@@ -132,6 +131,9 @@ def build_history_pdf(patient, studies_full, trend_pngs, images_for):
     count_rows = [(MODALITY_LABELS[m], str(n)) for m, n in counts.items()]
     story.append(_data_table([("Modality", "Studies on record")]
                              + (count_rows or [("—", "No studies recorded")]), ACCENT))
+    story += [Spacer(1, 12), Paragraph(
+        "Research prototype; not a medical device. Clinical review is required.",
+        REPORT_STYLES["Disclaimer"])]
     story.append(PageBreak())
 
     toc = TableOfContents()
@@ -177,6 +179,7 @@ def build_history_pdf(patient, studies_full, trend_pngs, images_for):
                             "issued for that visit.", REPORT_STYLES["ReportBody"])]
     for i, s in enumerate(ordered):
         spec = REPORT_SPECS[s["modality"]](s["report"])
+        fields = CLINICAL_REPORT_FIELDS
         if i:
             story.append(PageBreak())
         else:
@@ -185,10 +188,10 @@ def build_history_pdf(patient, studies_full, trend_pngs, images_for):
                               1, REPORT_STYLES["SectionHeading"]))
         images = [("image", caption, path) for caption, path in images_for(s)]
         story += report_story(spec["title"], spec["subtitle"], spec["accent"],
-                              form_meta(s["report"]), PATIENT_FIELDS,
-                              "Patient & Study Details",
+                              form_meta(s["report"], fields=fields), fields,
+                              "Patient Information",
                               spec["sections"] + images + spec["closing"],
-                              spec["disclaimer"])
+                              "")
 
     doc.multiBuild(story)
     buffer.seek(0)

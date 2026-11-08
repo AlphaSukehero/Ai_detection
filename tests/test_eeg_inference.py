@@ -64,6 +64,34 @@ def test_timeline_covers_the_recording():
     assert r["duration_s"] == pytest.approx(20.0, abs=2.0)
 
 
+def test_reported_duration_includes_the_unwindowed_tail():
+    r = analyse_signal(_recording(seconds=20.25), FS, model=None)
+    assert r["duration_s"] == pytest.approx(20.25)
+
+
+def test_eeg_model_with_wrong_task_card_is_refused(monkeypatch):
+    import os
+
+    import app as flask_app
+
+    path = os.path.join("model", "eeg_seizure.keras")
+    original_exists = os.path.exists
+    monkeypatch.setattr(flask_app.os.path, "exists",
+                        lambda candidate: candidate == path or original_exists(candidate))
+    monkeypatch.setattr(flask_app, "TF_AVAILABLE", True)
+    monkeypatch.setattr(flask_app, "load_card", lambda _path: {
+        "task": "eeg_alzheimer", "classes": ["negative", "positive"],
+        "input_shape": [64, 64, 1], "preprocessing": "scalogram_log_minmax"})
+    monkeypatch.setattr(flask_app, "load_model",
+                        lambda *_args, **_kwargs: pytest.fail("mismatched model was loaded"))
+    key = ("seizure", "scalogram")
+    flask_app._eeg_models.pop(key, None)
+    try:
+        assert flask_app.get_eeg_model(*key) == (None, None)
+    finally:
+        flask_app._eeg_models.pop(key, None)
+
+
 def test_consecutive_flagged_windows_become_one_episode():
     r0 = analyse_signal(_recording(), FS, model=None)
     n = r0["n_windows"]
