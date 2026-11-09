@@ -1,0 +1,250 @@
+"""Convert ECG images into calibrated signals."""
+import numpy as np
+
+MIN_PX_PER_MM = 2.0
+MAX_PX_PER_MM = 40.0
+
+
+def _dominant_period(profile):
+    """Strongest period (px) in a 1-D ink profile within the grid range."""
+    profile = profile - profile.mean()
+    if np.std(profile) < 1e-6:
+        return None
+    spectrum = np.abs(np.fft.rfft(profile))
+    freqs = np.fft.rfftfreq(len(profile), d=1.0)
+    # Only consider periods that could plausibly be 1 mm rulings.
+    valid = (freqs > 1.0 / MAX_PX_PER_MM) & (freqs < 1.0 / MIN_PX_PER_MM)
+    if not np.any(valid):
+        return None
+    band = spectrum[valid]
+    peak = float(np.max(band))
+    if peak < 4.0 * float(np.median(band)):
+        return None
+    # A ruling is a comb: its harmonics are as strong as its fundamental, so
+    # argmax can land on half the true spacing. Take the lowest strong one.
+    strong = np.flatnonzero(band >= 0.5 * peak)
+    return float(1.0 / freqs[valid][strong[0]])
+
+
+def detect_grid_scale(gray):
+    """Pixels per millimetre, from the dominant period of the printed grid.
+
+    The grid is strongly periodic, so its spacing shows up as a clear peak in
+    the FFT of the column-ink profile. Returns None when no such peak stands
+    out, which forces every time-based parameter to report "—" rather than
+    silently assuming a scale.
+
+    The profile is the MEDIAN ink per column, not the mean. A ruling is inked
+    in every row of its column; a QRS spike only in the few rows the trace
+    crosses. With the mean, a regular QRS train's harmonics were read as a
+    grid and a gridless 72 bpm strip was reported at 125 bpm.
+    """
+    ink = 255.0 - np.asarray(gray, dtype=float)
+    return _dominant_period(np.median(ink, axis=0))
+
+from PIL import Image
+from scipy.signal import find_peaks as _find_peaks
+from scipy.ndimage import gaussian_filter1d
+
+LEAD_NAMES_12 = ["I", "II", "III", "aVR", "aVL", "aVF",
+                 "V1", "V2", "V3", "V4", "V5", "V6"]
+
+# Physical panel positions on a standard 3x4 printed sheet. The columns are
+# limb / augmented / precordial groups, so reading the sheet row-major gives
+# I, aVR, V1, V4 across the top row — NOT the clinical listing order above.
+# Task 10 reads leads I and aVF from here, so a transposed mapping would
+# silently yield a wrong axis in degrees with no visible error.
+LEAD_PANELS_3X4 = [
+    ["I",   "aVR", "V1", "V4"],
+    ["II",  "aVL", "V2", "V5"],
+    ["III", "aVF", "V3", "V6"],
+]
+
+
+def _trace_row_band(ink_band):
+    """Column-wise centre of ink mass within one horizontal band.
+
+    Returns the mean-centred deflection in PIXEL units. It must NOT be scaled
+    by the band's own standard deviation: doing so gives every lead its own
+    private gain, which makes millimetre amplitudes (ST) meaningless and
+    destroys the lead-to-lead amplitude ratio the QRS axis is computed from.
+    Callers that need a normalised trace (detect_r_peaks, qrs_bounds) already
+    call ecg.delineate._normalise themselves.
+    """
+    h = ink_band.shape[0]
+    rows = np.arange(h, dtype=float)
+    out = np.full(ink_band.shape[1], h / 2.0)
+    thr = np.percentile(ink_band, 88)
+    found_any = False
+    for x in range(ink_band.shape[1]):
+        col = ink_band[:, x]
+        m = col >= max(thr, 1.0)
+        if m.sum() >= 1 and col[m].sum() > 1e-6:
+            out[x] = float(np.average(rows[m], weights=col[m]))
+            found_any = True
+    if not found_any:
+        # No ink anywhere in this band: report nothing rather than a flat
+        # zero trace, which would read downstream as a real isoelectric lead.
+        return None
+    sig = (h - 1.0) - out
+    return sig - np.mean(sig)
+
+
+def detect_layout(gray):
+    """Distinguish a rhythm strip from a 3x4 twelve-lead sheet.
+
+    A twelve-lead sheet has several well-separated horizontal trace bands; a
+    rhythm strip has one. Counting ink-density bands is more robust than
+    trying to find panel borders, which many printouts omit.
+    """
+    arr = np.asarray(gray, dtype=float)
+    ink = 255.0 - arr
+    rows = ink.mean(axis=1)
+    if np.std(rows) < 1e-6:
+        return "single"
+    rows = rows - rows.mean()
+    bands, _ = _find_peaks(rows, distance=max(1, arr.shape[0] // 12),
+                           prominence=float(np.std(rows)))
+    return "twelve_lead" if len(bands) >= 3 else "single"
+
+
+# The trace is the darkest ink on the page. Anything fainter than this share
+# of the darkest pixel -- the printed grid above all -- is not trace.
+TRACE_INK_FRACTION = 0.6
+# A row or column this densely inked from end to end is a drawn axes frame.
+FRAME_COVERAGE = 0.5
+FRAME_MARGIN_PX = 3
+
+
+def _trace_ink(ink):
+    """Ink with everything fainter than the trace (the grid) zeroed."""
+    peak = float(ink.max()) if ink.size else 0.0
+    if peak <= 0:
+        return ink
+    return np.where(ink >= TRACE_INK_FRACTION * peak, ink, 0.0)
+
+
+def _plot_area(dark):
+    """(top, bottom, left, right) inside a drawn axes frame, or None.
+
+    A strip exported from a plotting tool carries a frame, a title and tick
+    labels. Those are ink but not ECG: left in, the frame and title rows are
+    counted as extra trace bands and the labels drag the traced centre of
+    mass. All four sides must be present, so a sheet whose only long lines
+    are flat traces is left whole.
+    """
+    inked = dark > 0
+    rows = np.flatnonzero(inked.mean(axis=1) >= FRAME_COVERAGE)
+    cols = np.flatnonzero(inked.mean(axis=0) >= FRAME_COVERAGE)
+    if len(rows) < 2 or len(cols) < 2:
+        return None
+    h, w = dark.shape
+    top, bottom = int(rows.min()), int(rows.max())
+    left, right = int(cols.min()), int(cols.max())
+    if bottom - top < h // 4 or right - left < w // 4:
+        return None
+    # Step inward past the full thickness of each frame line.
+    while top + 1 in rows:
+        top += 1
+    while bottom - 1 in rows and bottom - 1 > top:
+        bottom -= 1
+    while left + 1 in cols:
+        left += 1
+    while right - 1 in cols and right - 1 > left:
+        right -= 1
+    box = (top + FRAME_MARGIN_PX, bottom - FRAME_MARGIN_PX + 1,
+           left + FRAME_MARGIN_PX, right - FRAME_MARGIN_PX + 1)
+    if box[1] - box[0] < 8 or box[3] - box[2] < 8:
+        return None
+    return box
+
+
+def _colored_plot_area(rgb):
+    """Find a red ECG-paper frame when it is too light for ``_plot_area``."""
+    arr = np.asarray(rgb)
+    r, g, b = (arr[:, :, i].astype(int) for i in range(3))
+    red = (r > g + 15) & (r > b + 15)
+
+    def border_limits(support):
+        hits = np.flatnonzero(support > 0.65)
+        if len(hits) < 4:
+            return None
+        groups = np.split(hits, np.flatnonzero(np.diff(hits) > 2) + 1)
+        if len(groups) < 2:
+            return None
+        return int(groups[0][-1]) + 1, int(groups[-1][0])
+
+    ys = border_limits(red.mean(axis=1))
+    xs = border_limits(red.mean(axis=0))
+    if ys is None or xs is None:
+        return None
+    if ys[1] - ys[0] < arr.shape[0] // 4 or xs[1] - xs[0] < arr.shape[1] // 4:
+        return None
+    return ys[0], ys[1], xs[0], xs[1]
+
+
+def _rhythm_row_boundary(ink):
+    """Find the fourth full-width row on a 3x4 ECG sheet, when present."""
+    h = ink.shape[0]
+    density = gaussian_filter1d((ink > 0).mean(axis=1), sigma=max(2, h / 250.0))
+    peaks, props = _find_peaks(
+        density, distance=max(1, int(h * 0.15)), prominence=0.06)
+    if len(peaks) < 4:
+        return None
+    strongest = np.argsort(props["prominences"])[-4:]
+    centers = np.sort(peaks[strongest])
+    gaps = np.diff(centers)
+    if (centers[0] < h * 0.05 or centers[-1] > h * 0.95
+            or np.mean(gaps) < h * 0.18
+            or np.std(gaps) / np.mean(gaps) > 0.20):
+        return None
+    return int((centers[-2] + centers[-1]) // 2)
+
+
+def extract_leads(image_path):
+    """Digitize an ECG image into one signal per lead."""
+    source = Image.open(image_path).convert("RGB")
+    rgb = np.asarray(source)
+    gray = np.asarray(source.convert("L"), dtype=float)
+    area = _plot_area(_trace_ink(255.0 - gray))
+    if area is None:
+        area = _colored_plot_area(rgb)
+    if area is not None:
+        gray = gray[area[0]:area[1], area[2]:area[3]]
+    px_per_mm = detect_grid_scale(gray)
+    # Layout and tracing both read the trace alone: heavy major rulings are
+    # horizontal ink bands too, and would be counted as leads.
+    ink = _trace_ink(255.0 - gray)
+    layout = detect_layout(255.0 - ink)
+    w_full = gray.shape[1]
+
+    if layout == "single":
+        if area is None:
+            # No drawn frame to bound the recording, so the trace bounds it.
+            # Blank paper either side carries no samples: left in, a stated
+            # duration is spread over it and every interval reads long.
+            cols = np.flatnonzero((ink > 0).any(axis=0))
+            if len(cols):
+                ink = ink[:, cols[0]:cols[-1] + 1]
+        return {"leads": {"II": _trace_row_band(ink)},
+                "layout": layout, "px_per_mm": px_per_mm, "width": ink.shape[1]}
+
+    h, w = ink.shape
+    rhythm = None
+    rows_end = h
+    rhythm_start = _rhythm_row_boundary(ink)
+    if rhythm_start is not None:
+        rhythm = _trace_row_band(ink[rhythm_start:, :])
+        rows_end = rhythm_start
+    row_height = rows_end // 3
+    leads = {}
+    for r in range(3):
+        band = ink[r * row_height:(r + 1) * row_height, :]
+        for c in range(4):
+            col = band[:, c * w // 4:(c + 1) * w // 4]
+            leads[LEAD_PANELS_3X4[r][c]] = _trace_row_band(col)
+    out = {"leads": leads, "layout": layout, "px_per_mm": px_per_mm,
+           "width": w_full}
+    if rhythm is not None:
+        out["rhythm"] = rhythm
+    return out

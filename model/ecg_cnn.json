@@ -1,0 +1,44 @@
+{
+  "task": "ecg",
+  "classes": [
+    "N",
+    "S",
+    "V",
+    "F",
+    "Q"
+  ],
+  "input_shape": [
+    280,
+    1
+  ],
+  "preprocessing": "beat_zscore",
+  "metrics": {
+    "test_accuracy": 0.8402527620695901,
+    "max_class_weight": 20.0,
+    "macro_f1": 0.44461122975394546,
+    "macro_f1_supported": 0.7405277982398846,
+    "supported_classes": [
+      "N",
+      "S",
+      "V"
+    ],
+    "per_class_f1": {
+      "N": 0.9078950567753544,
+      "S": 0.48453430101952655,
+      "V": 0.8291540369247726,
+      "F": 0.0014727540500736377,
+      "Q": 0.0
+    }
+  },
+  "trained": "2026-11-09",
+  "aux_inputs": {
+    "rr": 4
+  },
+  "train_support": {
+    "N": 36913,
+    "S": 559,
+    "V": 2794,
+    "F": 42,
+    "Q": 6
+  }
+}

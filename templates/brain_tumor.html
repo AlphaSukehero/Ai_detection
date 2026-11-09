@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Brain Tumor MRI Detection | AI Medical Engine</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="page">
+        <!-- Top Navigation -->
+        <nav class="navbar">
+            <a href="/" class="nav-brand">
+                <div class="nav-logo" style="background: var(--mri-gradient)">🧠</div>
+                <div class="nav-brand-text">
+                    <h1>BRAIN TUMOR MRI ANALYSIS</h1>
+                    <p>Convolutional Neural Network Medical Diagnostic Engine</p>
+                </div>
+            </a>
+            {% with active = "/brain-tumor" %}{% include "_nav_links.html" %}{% endwith %}
+        </nav>
+
+        <div class="main-container">
+            <!-- Upload Panel -->
+            <div class="panel">
+                <div class="panel-title">
+                    <span>🧠</span> Patient Details & Brain MRI Upload
+                </div>
+                <div class="panel-subtitle">
+                    Enter the patient details, then select or upload a brain magnetic resonance imaging scan (.jpg, .jpeg, .png, .dcm / DICOM) for deep AI classification across 4 target classes: Glioma, Meningioma, Pituitary Tumor, or No Tumor.
+                </div>
+
+                {% if error %}
+                <div style="background: rgba(239, 68, 68, 0.15); border: 1px solid var(--danger); padding: 14px 20px; border-radius: 12px; margin-bottom: 20px; color: var(--danger);">
+                    <strong>⚠ Error:</strong> {{ error }}
+                </div>
+                {% endif %}
+
+                <form action="/analyze_brain_tumor" method="POST" enctype="multipart/form-data" id="mri-form">
+                    {% include "_patient_form.html" %}
+
+                    <h3 style="font-family: var(--font-heading); font-size: 16px; margin: 28px 0 14px; color: var(--text-primary);">
+                        🧠 MRI Scan
+                    </h3>
+
+                    <div class="upload-dropzone" onclick="document.getElementById('mri_file').click();">
+                        <div class="upload-icon">📁</div>
+                        <h3 style="margin-bottom: 6px; font-weight: 600;" id="upload-label">Drag &amp; Drop MRI scan here or click to browse</h3>
+                        <p style="color: var(--text-muted); font-size: 13px;">Supports JPG / PNG / DICOM images up to 32 MB</p>
+                        <input type="file" name="mri_file" id="mri_file" class="file-input" accept="image/*,.dcm,.dicom" onchange="document.getElementById('upload-label').innerText = 'Selected: ' + this.files[0].name;">
+                    </div>
+
+                    <button type="submit" class="btn-primary" style="width: 100%; margin-top: 16px; background: var(--mri-gradient);">
+                        🚀 Analyze MRI Scan &rarr;
+                    </button>
+
+                    <!-- Quick Sample Buttons -->
+                    <div style="text-align: center; margin-top: 20px;">
+                        <span style="font-size: 13px; color: var(--text-muted); display: block; margin-bottom: 10px;">Or test immediately with built-in sample scans:</span>
+                        <div class="sample-buttons">
+                            <button type="submit" name="sample_name" value="glioma" class="btn-sample">🧠 Test Glioma Scan</button>
+                            <button type="submit" name="sample_name" value="meningioma" class="btn-sample">🧠 Test Meningioma Scan</button>
+                            <button type="submit" name="sample_name" value="pituitary" class="btn-sample">🧠 Test Pituitary Scan</button>
+                            <button type="submit" name="sample_name" value="notumor" class="btn-sample">✅ Test No-Tumor Scan</button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+
+            <!-- ============================================================ -->
+            <!-- RESULT DISPLAY (matches reference Streamlit output) -->
+            <!-- ============================================================ -->
+            {% if result %}
+            <div class="result-card">
+
+                {% if patient %}
+                <h2 style="font-family: var(--font-heading); font-size: 22px; margin-bottom: 16px;">🗂️ Patient & Study Details</h2>
+                {% with meta = patient, meta_rows = patient_rows %}
+                    {% include "_meta_summary.html" %}
+                {% endwith %}
+                {% include "_record_panel.html" %}
+                {% endif %}
+
+
+                <!-- ============================== -->
+                <!-- 1. PREDICTION RESULT           -->
+                <!-- ============================== -->
+                <h2 style="font-family: var(--font-heading); font-size: 22px; margin-bottom: 16px;">🧠 Prediction Result</h2>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 28px;">
+                    <div class="metric-box">
+                        <div class="metric-label">Tumor Type</div>
+                        <div class="metric-value" style="color: #a5b4fc;">{{ result.prediction }}</div>
+                    </div>
+                    <div class="metric-box">
+                        <div class="metric-label">Model Confidence</div>
+                        <div class="metric-value" style="color: var(--success);">{{ result.confidence }}%</div>
+                    </div>
+                </div>
+
+                <!-- ============================== -->
+                <!-- 2. CLASS PROBABILITIES         -->
+                <!-- ============================== -->
+                <h2 style="font-family: var(--font-heading); font-size: 22px; margin-bottom: 16px;">📈 Class Probabilities</h2>
+
+                <div style="margin-bottom: 28px;">
+                    {% for class_name, prob in result.probabilities.items() %}
+                    <div style="margin-bottom: 14px;">
+                        <div style="font-size: 15px; font-weight: 600; color: var(--text-primary); margin-bottom: 4px;">
+                            {{ class_name }} — {{ prob }}%
+                        </div>
+                        <div class="progress-bar-container">
+                            <div class="progress-bar-fill" style="width: {{ prob }}%; {% if class_name == result.prediction %}background: var(--mri-gradient);{% endif %}"></div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+
+                <!-- ============================== -->
+                <!-- 3. NO TUMOR OR TUMOR DETECTED  -->
+                <!-- ============================== -->
+                {% if result.prediction == 'No Tumor' %}
+
+                <!-- NO TUMOR SUCCESS MESSAGE -->
+                <div style="background: rgba(16, 185, 129, 0.12); border: 1px solid rgba(16, 185, 129, 0.3); padding: 16px 20px; border-radius: 12px; margin-bottom: 28px; color: var(--success); font-size: 15px;">
+                    🟢 The model predicted No Tumor.
+                </div>
+
+                {% else %}
+
+                <!-- ======================================== -->
+                <!-- 4. EXPLAINABLE AI — GRAD-CAM             -->
+                <!-- ======================================== -->
+                <h2 style="font-family: var(--font-heading); font-size: 22px; margin-bottom: 16px;">🔥 Explainable AI — Grad-CAM</h2>
+
+                <!-- Original MRI + Grad-CAM Heatmap side by side -->
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 24px;">
+                    <div style="background: rgba(15, 23, 42, 0.7); border-radius: 16px; padding: 16px; text-align: center; border: 1px solid var(--border-color);">
+                        <div style="font-size: 14px; font-weight: 600; color: var(--text-primary); margin-bottom: 12px;">Original MRI</div>
+                        <img src="{{ url_for('uploaded_file', filename=result.image_filename) }}" alt="Original MRI" style="max-width: 100%; max-height: 300px; border-radius: 10px; object-fit: contain;">
+                    </div>
+                    {% if result.heatmap_filename %}
+                    <div style="background: rgba(15, 23, 42, 0.7); border-radius: 16px; padding: 16px; text-align: center; border: 1px solid var(--border-color);">
+                        <div style="font-size: 14px; font-weight: 600; color: var(--text-primary); margin-bottom: 12px;">Grad-CAM Heatmap</div>
+                        <img src="{{ url_for('uploaded_file', filename=result.heatmap_filename) }}" alt="Grad-CAM Heatmap" style="max-width: 100%; max-height: 300px; border-radius: 10px; object-fit: contain;">
+                    </div>
+                    {% endif %}
+                </div>
+
+                <!-- ============================== -->
+                <!-- 5. TUMOR-INFLUENCING REGION    -->
+                <!-- ============================== -->
+                {% if result.highlighted_filename %}
+                <h3 style="font-family: var(--font-heading); font-size: 18px; margin-bottom: 16px;">🎯 Tumor-Influencing Region</h3>
+
+                <!-- Centered highlighted image -->
+                <div style="display: flex; justify-content: center; margin-bottom: 16px;">
+                    <div style="background: rgba(15, 23, 42, 0.7); border-radius: 16px; padding: 16px; text-align: center; border: 1px solid var(--border-color); max-width: 500px;">
+                        <img src="{{ url_for('uploaded_file', filename=result.highlighted_filename) }}" alt="Highlighted Tumor Region" style="max-width: 100%; max-height: 320px; border-radius: 10px; object-fit: contain;">
+                        <div style="color: var(--text-muted); font-size: 12px; margin-top: 8px;">Red = high activation | Yellow = estimated boundary</div>
+                    </div>
+                </div>
+
+                <!-- Info disclaimer -->
+                <div style="background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.3); padding: 14px 20px; border-radius: 12px; margin-bottom: 28px; color: #60a5fa; font-size: 14px;">
+                    ℹ️ The highlighted region represents the image area that most influenced the model prediction. It is not a clinically validated tumor segmentation.
+                </div>
+                {% endif %}
+
+                {% endif %}
+
+                <!-- ============================== -->
+                <!-- 6. MODEL & ATTENTION MAP       -->
+                <!-- ============================== -->
+                <h2 style="font-family: var(--font-heading); font-size: 22px; margin-bottom: 16px;">📊 Model &amp; Attention Map</h2>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px;">
+                    <div class="metric-box">
+                        <div class="metric-label">Model Used</div>
+                        <div class="metric-value" style="font-size: 16px;">{{ result.model_name }}</div>
+                    </div>
+                    <div class="metric-box">
+                        <div class="metric-label">Peak Attention Location</div>
+                        <div class="metric-value" style="font-size: 16px; color: #60a5fa;">{{ result.location }}</div>
+                    </div>
+                </div>
+                {% if result.attention_error %}
+                <div style="background: rgba(251,191,36,0.12); border: 1px solid #f59e0b; border-radius: 12px; padding: 14px 20px; margin-bottom: 14px; font-size: 14px;">
+                    ⚠️ Attention map unavailable: {{ result.attention_error }}
+                </div>
+                {% endif %}
+                <div style="color: var(--text-muted); font-size: 13px; margin-bottom: 28px;">
+                    Lesion size and severity are not reported: this system has a classifier, not a segmentation model, so it cannot measure them.
+                </div>
+
+                <!-- ============================== -->
+                <!-- 7. PATIENT REPORT / PDF        -->
+                <!-- ============================== -->
+                {% with verdict = result.verdict, notes = result.notes, title = "MRI Classification" %}
+                    {% include "_doctor_notes.html" %}
+                {% endwith %}
+
+                <h2 style="font-family: var(--font-heading); font-size: 22px; margin-bottom: 16px;">📄 Patient Report</h2>
+
+                <div style="background: rgba(16, 185, 129, 0.12); border: 1px solid rgba(16, 185, 129, 0.3); padding: 14px 20px; border-radius: 12px; margin-bottom: 16px; color: var(--success); font-size: 14px;">
+                    ✅ Complete report generated successfully.
+                </div>
+
+                <form action="/download_brain_tumor_report" method="POST">
+                    {% with meta = patient, meta_fields = patient_fields %}
+                        {% include "_meta_hidden.html" %}
+                    {% endwith %}
+                    <input type="hidden" name="prediction" value="{{ result.prediction }}">
+                    <input type="hidden" name="confidence" value="{{ result.confidence }}">
+                    <input type="hidden" name="findings" value="{{ result.findings }}">
+                    <input type="hidden" name="recommendation" value="{{ result.recommendation }}">
+                    <input type="hidden" name="location" value="{{ result.location }}">
+                    <input type="hidden" name="model_name" value="{{ result.model_name }}">
+                    <input type="hidden" name="file_type" value="{{ result.file_type }}">
+                    <input type="hidden" name="input_source" value="{{ result.input_source }}">
+                    <button type="submit" class="btn-primary" style="width: 100%; padding: 14px 24px; background: var(--mri-gradient); box-shadow: 0 4px 15px rgba(139, 92, 246, 0.3);">
+                        📥 Download Complete Patient Report (PDF)
+                    </button>
+                </form>
+
+            </div>
+            {% endif %}
+
+            <!-- ============================== -->
+            <!-- 8. DISCLAIMER                  -->
+            <!-- ============================== -->
+            <div style="border-top: 1px solid var(--border-color); padding-top: 24px; margin-top: 10px;">
+                <p style="color: var(--text-muted); font-size: 13px; line-height: 1.7;">
+                    ⚠️ <strong>Research Prototype</strong> — This application is intended for academic and research purposes. The CNN provides a classification prediction and Grad-CAM provides an explanation of image regions influencing that prediction.<br>
+                    The highlighted region and its location are model attention, not a clinical measurement or a tumour segmentation.
+                </p>
+            </div>
+        </div>
+
+        <footer>
+            <p>&copy; 2026 Unified AI Analysis Engine. Research prototype - clinical confirmation required.</p>
+        </footer>
+    </div>
+</body>
+</html>

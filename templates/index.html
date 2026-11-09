@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Medical Analysis Platform</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="page">
+        <!-- Top Navigation -->
+        <nav class="navbar">
+            <a href="/" class="nav-brand">
+                <div class="nav-logo">AI</div>
+                <div class="nav-brand-text">
+                    <h1>UNIFIED AI PLATFORM</h1>
+                    <p>Medical Imaging &amp; Signal Intelligence</p>
+                </div>
+            </a>
+            {% with active = "/" %}{% include "_nav_links.html" %}{% endwith %}
+        </nav>
+
+        <!-- Hero Section -->
+        <header class="hero">
+            <div class="hero-badge">
+                <span class="dot"></span> MULTI-MODALITY CLINICAL AI ENGINE
+            </div>
+            <h1>Artificial Intelligence Platform</h1>
+            <p>Integrated deep learning and neural network algorithms for diagnostic imaging and biosignal analysis.</p>
+        </header>
+
+        <!-- Module Cards -->
+        <main class="dashboard-container">
+            <!-- Brain Tumor Card -->
+            <div class="dashboard-card brain-card">
+                <div class="card-icon brain">🧠</div>
+                <h2>Brain Tumor MRI Detection</h2>
+                <p>Advanced convolutional neural network (VGG16 Architecture) for multi-class brain tumor classification from magnetic resonance imaging.</p>
+                <div class="features-list">
+                    <div class="feature-item">
+                        <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                        <span>4-Class MRI Tumor Classification</span>
+                    </div>
+                    <div class="feature-item">
+                        <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                        <span>Radiological Diagnostic Summary</span>
+                    </div>
+                    <div class="feature-item">
+                        <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                        <span>PDF Report Generation</span>
+                    </div>
+                </div>
+                <a href="/brain-tumor" class="btn-primary">
+                    Launch MRI Dashboard &rarr;
+                </a>
+            </div>
+
+            <!-- ECG Card -->
+            <div class="dashboard-card ecg-card">
+                <div class="card-icon ecg">❤️</div>
+                <h2>ECG Signal Analysis</h2>
+                <p>1D Convolutional Neural Network trained on MIT-BIH for AAMI beat classification, with signal-derived interval and rhythm measurements.</p>
+                <div class="features-list">
+                    <div class="feature-item">
+                        <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                        <span>AAMI 5-Class Beat Classification</span>
+                    </div>
+                    <div class="feature-item">
+                        <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                        <span>Waveform Parameter Extraction (HR, QRS, QTc)</span>
+                    </div>
+                    <div class="feature-item">
+                        <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                        <span>Clinical PDF Diagnostic Report</span>
+                    </div>
+                </div>
+                <a href="/ecg" class="btn-primary">
+                    Launch ECG Dashboard &rarr;
+                </a>
+            </div>
+
+            <!-- EEG Card -->
+            <div class="dashboard-card eeg-card">
+                <div class="card-icon eeg">🧬</div>
+                <h2>EEG Signal Analysis</h2>
+                <p>Windowed wavelet-scalogram CNNs for seizure and cortical-slowing screening, with signal-derived spectral and spike measurements.</p>
+                <div class="features-list">
+                    <div class="feature-item"><svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg><span>EDF / BDF / SET or Trace Image Input</span></div>
+                    <div class="feature-item"><svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg><span>Episode Onset, Duration &amp; Burden</span></div>
+                    <div class="feature-item"><svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg><span>Band Power, Spectral Entropy, Spike Rate</span></div>
+                </div>
+                <a href="/eeg" class="btn-primary" style="background: var(--eeg-gradient);">
+                    Launch EEG Dashboard &rarr;
+                </a>
+            </div>
+        </main>
+
+        <!-- Footer -->
+        <footer>
+            <p>&copy; 2026 Unified AI Analysis Engine. Research & Educational Prototype Platform.</p>
+        </footer>
+    </div>
+</body>
+</html>

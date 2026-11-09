@@ -1,0 +1,57 @@
+# Virtual environment
+.venv/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Ruff cache
+.ruff_cache/
+
+# Model files (too large for git) - but keep the JSON model cards,
+# which record what each model was trained on and how it is preprocessed.
+model/*
+!model/*.json
+*.keras
+*.h5
+*.pkl
+*.npy
+*.pth
+*.pt
+*.onnx
+*.tflite
+
+# Dataset (too large for git - download separately)
+dataset/
+
+# Uploads
+uploads/
+
+# Local publishing snapshot; commit the project tree above it instead.
+_remote_publish/
+
+# Generated PDFs can contain patient details.
+reports/
+
+# Log files
+*.log
+
+# Ralph config
+.ralph/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Prepared datasets (reproducible from scripts/prepare_*.py)
+data/raw/
+data/processed/
+.gstack/
+
+# Patient record store (database + study files). Real patient data: never commit.
+records_data/
